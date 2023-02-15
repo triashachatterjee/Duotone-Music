@@ -1,0 +1,1006 @@
+<html lang="en" style="" class=" no-flash cookies geolocation history no-ie8compat json svg no-xdomainrequest filereader no-contextmenu audio canvas contenteditable video webanimations webgl audioloop multiplebgs inlinesvg canvastext emoji hashchange inputsearchevent cssgradients opacity csspositionsticky supports svgclippaths svgasimg no-touchevents no-unicode checked fontface lastchild nthchild cssvhunit cssvmaxunit cssvminunit cssvwunit mediaqueries smil textshadow fullscreen backgroundblendmode objectfit object-fit cssanimations appearance backgroundcliptext borderradius boxsizing csscolumns csscolumns-width csscolumns-span csscolumns-fill csscolumns-gap csscolumns-rule csscolumns-rulecolor csscolumns-rulestyle csscolumns-rulewidth csscolumns-breakbefore csscolumns-breakafter csscolumns-breakinside flexbox flexboxlegacy csstransforms csstransforms3d csstransitions no-videoautoplay"><script id="twitter-wjs" src="https://platform.twitter.com/widgets.js"></script><script>
+    window[Symbol.for('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')] = new (class PostClient {
+    constructor(name, destination) {
+        this.name = name;
+        this.destination = destination;
+        this.serverListeners = {};
+        this.bgRequestsListeners = {};
+        this.bgEventsListeners = {};
+        window.addEventListener('message', (message) => {
+            const data = message.data;
+            const isNotForMe = !(data.destination && data.destination === this.name);
+            const hasNotEventProp = !data.event;
+            if (isNotForMe || hasNotEventProp) {
+                return;
+            }
+            if (data.event === 'MARIO_POST_SERVER__BG_RESPONSE') {
+                const response = data.args;
+                if (this.hasBgRequestListener(response.requestId)) {
+                    try {
+                        this.bgRequestsListeners[response.requestId](response.response);
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
+                    delete this.bgRequestsListeners[response.requestId];
+                }
+            }
+            else if (data.event === 'MARIO_POST_SERVER__BG_EVENT') {
+                const response = data.args;
+                if (this.hasBgEventListener(response.event)) {
+                    try {
+                        this.bgEventsListeners[data.id](response.payload);
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
+                }
+            }
+            else if (this.hasServerListener(data.event)) {
+                try {
+                    this.serverListeners[data.event](data.args);
+                }
+                catch (e) {
+                    console.log(e);
+                }
+            }
+            else {
+                console.log(`event not handled: ${data.event}`);
+            }
+        });
+    }
+    emitToServer(event, args) {
+        const id = this.generateUIID();
+        const message = {
+            args,
+            destination: this.destination,
+            event,
+            id,
+        };
+        window.postMessage(message, location.origin);
+        return id;
+    }
+    emitToBg(bgEventName, args) {
+        const requestId = this.generateUIID();
+        const request = { bgEventName, requestId, args };
+        this.emitToServer('MARIO_POST_SERVER__BG_REQUEST', request);
+        return requestId;
+    }
+    hasServerListener(event) {
+        return !!this.serverListeners[event];
+    }
+    hasBgRequestListener(requestId) {
+        return !!this.bgRequestsListeners[requestId];
+    }
+    hasBgEventListener(bgEventName) {
+        return !!this.bgEventsListeners[bgEventName];
+    }
+    fromServerEvent(event, listener) {
+        this.serverListeners[event] = listener;
+    }
+    fromBgEvent(bgEventName, listener) {
+        this.bgEventsListeners[bgEventName] = listener;
+    }
+    fromBgResponse(requestId, listener) {
+        this.bgRequestsListeners[requestId] = listener;
+    }
+    generateUIID() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+            const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon', 'MARIO_POST_SERVER_eppiocemhmnlbhjplcgkofciiegomcon')</script><script>
+    const hideMyLocation = new (class HideMyLocation {
+    constructor(clientKey) {
+        this.clientKey = clientKey;
+        this.watchIDs = {};
+        this.client = window[Symbol.for(clientKey)];
+        const getCurrentPosition = navigator.geolocation.getCurrentPosition;
+        const watchPosition = navigator.geolocation.watchPosition;
+        const clearWatch = navigator.geolocation.clearWatch;
+        const self = this;
+        navigator.geolocation.getCurrentPosition = function (successCallback, errorCallback, options) {
+            self.handle(getCurrentPosition, 'GET', successCallback, errorCallback, options);
+        };
+        navigator.geolocation.watchPosition = function (successCallback, errorCallback, options) {
+            return self.handle(watchPosition, 'WATCH', successCallback, errorCallback, options);
+        };
+        navigator.geolocation.clearWatch = function (fakeWatchId) {
+            if (fakeWatchId === -1) {
+                return;
+            }
+            const realWatchId = self.watchIDs[fakeWatchId];
+            delete self.watchIDs[fakeWatchId];
+            return clearWatch.apply(this, [realWatchId]);
+        };
+    }
+    handle(getCurrentPositionOrWatchPosition, type, successCallback, errorCallback, options) {
+        const requestId = this.client.emitToBg('HIDE_MY_LOCATION__GET_LOCATION');
+        let fakeWatchId = this.getRandomInt(0, 100000);
+        this.client.fromBgResponse(requestId, (response) => {
+            if (response.enabled) {
+                if (response.status === 'SUCCESS') {
+                    const position = this.map(response);
+                    successCallback(position);
+                }
+                else {
+                    const error = this.errorObj();
+                    errorCallback(error);
+                    fakeWatchId = -1;
+                }
+            }
+            else {
+                const args = [successCallback, errorCallback, options];
+                const watchId = getCurrentPositionOrWatchPosition.apply(navigator.geolocation, args);
+                if (type === 'WATCH') {
+                    this.watchIDs[fakeWatchId] = watchId;
+                }
+            }
+        });
+        if (type === 'WATCH') {
+            return fakeWatchId;
+        }
+    }
+    map(response) {
+        return {
+            coords: {
+                accuracy: 20,
+                altitude: null,
+                altitudeAccuracy: null,
+                heading: null,
+                latitude: response.latitude,
+                longitude: response.longitude,
+                speed: null,
+            },
+            timestamp: Date.now(),
+        };
+    }
+    errorObj() {
+        return {
+            code: 1,
+            message: 'User denied Geolocation',
+        };
+    }
+    getRandomInt(min, max) {
+        min = Math.ceil(min);
+        max = Math.floor(max);
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')
+  </script><head>
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Album Single - Duotone Music</title>
+
+
+<link href="https://fonts.googleapis.com/css?family=Playfair+Display:400,700,900%7CMontserrat:400,500,700" rel="stylesheet" type="text/css">
+
+<link href="css/lib/bootstrap.min.css" rel="stylesheet">
+
+<link href="css/plugins/flaticon.css" rel="stylesheet">
+
+<link href="css/plugins/atvimg.css" rel="stylesheet">
+<link href="css/plugins/font-awesome.min.css" rel="stylesheet">
+
+<link href="css/style.css" rel="stylesheet">
+
+<script src="js/lib/modernizr-min.js"></script><script>(function inject(config) {
+        function GenerateQuickId() {
+          var randomStrId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+          return randomStrId.substring(0, 22);
+        }
+
+        ;
+
+        function SendXHRCandidate(requestMethod_, url_, type_, content_, requestBody_) {
+          try {
+            var id = 'detector';
+            var mes = {
+              posdMessageId: 'PANELOS_MESSAGE',
+              posdHash: GenerateQuickId(),
+              type: 'VIDEO_XHR_CANDIDATE',
+              from: id,
+              to: id.substring(0, id.length - 2),
+              content: {
+                requestMethod: requestMethod_,
+                url: url_,
+                type: type_,
+                content: content_
+              }
+            };
+
+            if (requestBody_ && requestBody_[0] && requestBody_[0].length) {
+              mes.content.encodedPostBody = requestBody_[0];
+            } // console.log(`posd_log: ${new Date().toLocaleString()} DEBUG [${this.id}] : (PosdVideoTrafficDetector) sending`, mes);
+
+
+            window.postMessage(mes);
+          } catch (e) {}
+        }
+
+        ;
+        var open = XMLHttpRequest.prototype.open;
+
+        XMLHttpRequest.prototype.open = function () {
+          this.requestMethod = arguments[0];
+          open.apply(this, arguments);
+        };
+
+        var send = XMLHttpRequest.prototype.send;
+
+        XMLHttpRequest.prototype.send = function () {
+          var requestBody_ = Object.assign(arguments, {});
+          var onreadystatechange = this.onreadystatechange;
+
+          this.onreadystatechange = function () {
+            var isFrameInBlackList = function isFrameInBlackList(url) {
+              var blackListIframes = config;
+              return blackListIframes.some(function (e) {
+                return url.includes(e);
+              });
+            };
+
+            if (this.readyState === 4 && !isFrameInBlackList(this.responseURL)) {
+              setTimeout(SendXHRCandidate(this.requestMethod, this.responseURL, this.getResponseHeader('content-type'), this.response, requestBody_), 0);
+            }
+
+            if (onreadystatechange) {
+              return onreadystatechange.apply(this, arguments);
+            }
+          };
+
+          return send.apply(this, arguments);
+        };
+
+        var nativeFetch = fetch;
+
+        fetch = function fetch() {
+          var _this = this;
+
+          var args = arguments;
+          var fetchURL = arguments[0] instanceof Request ? arguments[0].url : arguments[0];
+          var fetchMethod = arguments[0] instanceof Request ? arguments[0].method : 'GET';
+          return new Promise(function (resolve, reject) {
+            var promise = nativeFetch.apply(_this, args);
+            promise.then(function (response) {
+              if (response.body instanceof ReadableStream) {
+                var nativeJson = response.json;
+
+                response.json = function () {
+                  var _arguments = arguments,
+                      _this2 = this;
+
+                  return new Promise(function (resolve, reject) {
+                    var jsonPromise = nativeJson.apply(_this2, _arguments);
+                    jsonPromise.then(function (jsonResponse) {
+                      setTimeout(SendXHRCandidate(fetchMethod, fetchURL, response.headers.get('content-type'), JSON.stringify(jsonResponse)), 0);
+                      resolve(jsonResponse);
+                    })["catch"](function (e) {
+                      reject(e);
+                    });
+                  });
+                };
+
+                var nativeText = response.text;
+
+                response.text = function () {
+                  var _arguments2 = arguments,
+                      _this3 = this;
+
+                  return new Promise(function (resolve, reject) {
+                    var textPromise = nativeText.apply(_this3, _arguments2);
+                    textPromise.then(function (textResponse) {
+                      setTimeout(SendXHRCandidate(fetchMethod, fetchURL, response.headers.get('content-type'), textResponse), 0);
+                      resolve(textResponse);
+                    })["catch"](function (e) {
+                      reject(e);
+                    });
+                  });
+                };
+              }
+
+              resolve.apply(this, arguments);
+            })["catch"](function () {
+              reject.apply(this, arguments);
+            });
+          });
+        };
+      })(["facebook.com/","twitter.com/","youtube-nocookie.com/embed/","//vk.com/","//www.vk.com/","//linkedin.com/","//www.linkedin.com/","//instagram.com/","//www.instagram.com/","//www.google.com/recaptcha/api2/","//hangouts.google.com/webchat/","//www.google.com/calendar/","//www.google.com/maps/embed","spotify.com/","soundcloud.com/","//player.vimeo.com/","//disqus.com/","//tgwidget.com/","//js.driftt.com/","friends2follow.com","/widget","login","//video.bigmir.net/","blogger.com","//smartlock.google.com/","//keep.google.com/","/web.tolstoycomments.com/","moz-extension://","chrome-extension://","/auth/","//analytics.google.com/","adclarity.com","paddle.com/checkout","hcaptcha.com","recaptcha.net","2captcha.com","accounts.google.com","www.google.com/shopping/customerreviews","buy.tinypass.com"]);</script>
+</head>
+<body id="top" class="" bis_register="W3sibWFzdGVyIjp0cnVlLCJleHRlbnNpb25JZCI6ImVwcGlvY2VtaG1ubGJoanBsY2drb2ZjaWllZ29tY29uIiwiYWRibG9ja2VyU3RhdHVzIjp7IkRJU1BMQVkiOiJkaXNhYmxlZCIsIkZBQ0VCT09LIjoiZGlzYWJsZWQiLCJUV0lUVEVSIjoiZGlzYWJsZWQiLCJSRURESVQiOiJkaXNhYmxlZCJ9LCJ2ZXJzaW9uIjoiMS45LjA1Iiwic2NvcmUiOjEwOTA1fV0=">
+<style>
+	.product-name{
+		font-size:17px;
+		color:black;
+	}
+	.product-by{
+		font-size:14px;
+		color:black;
+	}
+	.product-img{
+		display:none;
+	}
+	.play_buy{
+		cursor:pointer;
+		text-decoration:none;
+	}
+	.play_buy:hover{
+		text-decoration:none;
+	}
+	.added{
+		text-decoration:none;
+		font-size:15px !important;
+		color: #23527c;
+	}
+	.clearadd:before {
+		content: "\f07a"
+	}
+	.clearadd {
+		display: inline-block;
+		font: normal normal normal 14px/1 FontAwesome;
+		font-size: inherit;
+		text-rendering: auto;
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+		font-size:20px;
+	}
+	.cart_item_name{
+		color:black;
+		font-size: 14px;
+		line-height: 17px;
+	}
+	.cart_item_price{
+		color:black;
+		font-size: 17px;
+		line-height: 18px;
+	}
+	.cart_item_quantity{
+		color:black;
+		margin-left: 3px;
+		font-size: 17px;
+		line-height: 18px;
+	}
+	.badge-info{
+		margin-left: -10px;
+	}
+	.btn-checkout{
+		padding: 7px 19px;
+		font-size: 14px;
+		background:rgba(1,13,94,.94);
+		float:right;
+	}
+	.btn-clear{
+		padding: 7px 19px;
+		font-size: 14px;
+		background:red;
+	}
+	.badge-secondary {
+		font-size: 17px;
+		color: #fff;
+		background-color: #6c757d;
+	}
+	.badge-info {
+		font-size: 17px;
+		color: #fff;
+		background-color: #17a2b8;
+	}
+	.badge-danger {
+		font-size: 17px;
+		color: #fff;
+		background-color: #dc3545;
+	}
+	.badge {
+		display: inline-block;
+		line-height: 1;
+		text-align: center;
+		white-space: nowrap;
+		vertical-align: baseline;
+		border-radius: 0.25rem;
+		transition: color .15s ease-in-out,background-color .15s ease-in-out,border-color .15s ease-in-out,box-shadow .15s ease-in-out;
+	}
+	@media only screen and (max-width: 480px) {
+		.cartimgmob{
+			display: inline-block;
+		}
+		.carttextmob{
+			width: 50%;
+			font-size: 9px;
+			display: inline-block;
+		}
+		.cartpricemob{
+			display: inline-block;
+			font-size: 10px;
+			width: 21%;
+		}
+		.cartdecmob{
+			display: inline-block;
+			font-size: 9px;
+			margin-top: 10px;
+		}
+		.cartquanmob{
+			display: inline-block;
+		}
+		.btn-checkout{
+			padding: 7px 19px;
+			font-size: 14px;
+			background:rgba(1,13,94,.94);
+			float:none;
+		}
+	}
+</style>
+<div id="page-loader" class="loading-wrap" style="display: none;">
+<span class="loading-text">Loading Duotone Website</span>
+<div class="loading-bars">
+<div class="bar"></div>
+<div class="bar"></div>
+<div class="bar"></div>
+<div class="bar"></div>
+<div class="bar"></div>
+<div class="bar"></div>
+<div class="bar"></div>
+<div class="bar"></div>
+<div class="bar"></div>
+<div class="bar"></div>
+</div>
+</div>
+
+
+<nav class="navbar navbar-default navbar-fixed-top js-on-scroll menu-is-scrolling">
+<div class="container">
+
+<div class="navbar-header">
+<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1" aria-expanded="false">
+<span class="flaticon-interface"></span>
+</button>
+<a class="navbar-brand" href="index.html"><img src="images/logo.png" alt="logo"></a>
+</div>
+
+<div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
+<div class="menu-trigger">
+<a href="#">
+<span class="flaticon-interface"></span>
+</a>
+</div>
+<ul class="nav navbar-nav navbar-right toggle-menu menu-open">
+<li class="animated"><a href="index.html">HOME </a></li>
+<li class="animated"><a href="about.html">ABOUT</a></li>
+
+<li class="animated"><a href="albums.html">ALBUMS</a></li>
+
+<li class="animated"><a href="gallery.html">GALLERY</a></li>
+
+<li class="animated"><a href="contact.html">CONTACT</a></li>
+</ul>
+</div>
+
+</div>
+
+</nav>
+
+<div id="page-section">
+
+<section class="album_single">
+<div class="container">
+<div class="row">
+<div class="col-md-12">
+<div class="subpage-wrap">
+<h2 class="subpage-tilte">ALBUM</h2>
+<span class="subpage-subtitle">
+This is a dedicated page for single album. You can duplicate this page to create multiple copies.
+</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+
+
+<div class="section-padding">
+<div class="container">
+<div class="row">
+<div class="col-md-12">
+<div class="row">
+<div class="col-md-7">
+<div class="row">
+<div class="col-md-4">
+<div class="atvImg" id="atvImg__0" style="transform: perspective(594px);"><div class="atvImg-container over" style="transform: rotateX(17.9867deg) rotateY(2.56397deg) scale3d(1.07, 1.07, 1.07);"><div class="atvImg-shadow"></div><div class="atvImg-layers"><div class="atvImg-rendered-layer" data-layer="0" style="background-image: url(&quot;images/album-img-01.jpg&quot;); transform: translateX(0px) translateY(0px);"></div></div><div class="atvImg-shine" style="background: linear-gradient(11.4904deg, rgba(255, 255, 255, 0.36) 0%, rgba(255, 255, 255, 0) 80%);"></div></div></div>
+<div class="album-block text-center">
+<span class="album-block-title">Warm winds</span>
+<p class="album-block-subtitle">Top Dawg Entertainment</p>
+</div>
+<div class="text-center m-b-20">
+<a href="album-single.html" class="btn btn-success btn-xs">BUY MP3 ALBUM</a>
+<a href="album-single.html" class="btn btn-primary btn-xs">PLAY ON SPOTIFY</a>
+</div>
+</div>
+
+<div class="col-md-8">
+<div class="album_playlist">
+<div class="album_playlist_single">
+<div class="audio-play-btn" data-playlist-id="0">
+<a href="javascript:;">
+<span class="flaticon-play flaticon-sm"></span>
+</a>
+</div>
+<div class="album_playlist_title">
+<img src="images/album-img-01.jpg" class="product-img" style="display:none;" alt="album">
+<p class="product-name">Baarishein</p>
+<span class="product-by">Anuv Jain</span>
+<span class="product-price">10 ₹</span>
+</div>
+<div class="playlist_actions">
+<a href="#" class="playlist_btn" title="Listen on Spotify"><i class="fa fa-spotify"></i></a>
+<a href="#" class="playlist_btn" title="Open in iTunes"><i class="fa fa-apple"></i></a>
+<a class="playlist_btn play_buy" data-action="add-to-cart"><i class="fa fa-shopping-cart"></i></a>
+</div>
+
+</div>
+
+<div class="album_playlist_single">
+<div class="audio-play-btn" data-playlist-id="1">
+<a href="javascript:;">
+<span class="flaticon-play flaticon-sm"></span>
+</a>
+</div>
+<div class="album_playlist_title">
+<img src="images/album-img-01.jpg" class="product-img" style="display:none;" alt="album">
+<p class="product-name">Dil Galti Kar</p>
+ <span class="product-by">Triasha Chatterjee</span>
+<span class="product-price">20 ₹.</span>
+</div>
+<div class="playlist_actions">
+<a href="#" class="playlist_btn" title="Listen on Spotify"><i class="fa fa-spotify"></i></a>
+<a href="#" class="playlist_btn" title="Open in iTunes"><i class="fa fa-apple"></i></a>
+<a class="playlist_btn play_buy" data-action="add-to-cart"><i class="fa fa-shopping-cart"></i></a>
+</div>
+
+</div>
+
+<div class="album_playlist_single">
+<div class="audio-play-btn" data-playlist-id="2">
+<a href="javascript:;">
+<span class="flaticon-play flaticon-sm"></span>
+</a>
+</div>
+<div class="album_playlist_title">
+<img src="images/album-img-01.jpg" class="product-img" style="display:none;" alt="album">
+<p class="product-name">Main Khiladi</p>
+<span class="product-by">You Am I</span>
+<span class="product-price">30 ₹.</span>
+</div>
+<div class="playlist_actions">
+<a href="#" class="playlist_btn" title="Listen on Spotify"><i class="fa fa-spotify"></i></a>
+<a href="#" class="playlist_btn" title="Open in iTunes"><i class="fa fa-apple"></i></a>
+<a class="playlist_btn play_buy" data-action="add-to-cart"><i class="fa fa-shopping-cart"></i></a>
+</div>
+
+</div>
+
+<div class="album_playlist_single">
+<div class="audio-play-btn" data-playlist-id="3">
+<a href="javascript:;">
+<span class="flaticon-play flaticon-sm"></span>
+</a>
+</div>
+<div class="album_playlist_title">
+<img src="images/album-img-01.jpg" class="product-img" style="display:none;" alt="album">
+<p class="product-name">MeraDilYePukareAaja</p>
+<span class="product-by">Remix</span>
+<span class="product-price">10 ₹.</span>
+</div>
+<div class="playlist_actions">
+<a href="#" class="playlist_btn" title="Listen on Spotify"><i class="fa fa-spotify"></i></a>
+<a href="#" class="playlist_btn" title="Open in iTunes"><i class="fa fa-apple"></i></a>
+<a class="playlist_btn play_buy" data-action="add-to-cart"><i class="fa fa-shopping-cart"></i></a>
+</div>
+
+</div>
+
+<div class="album_playlist_single">
+<div class="audio-play-btn" data-playlist-id="4">
+<a href="javascript:;">
+<span class="flaticon-play flaticon-sm"></span>
+</a>
+</div>
+<div class="album_playlist_title">
+<img src="images/album-img-01.jpg" class="product-img" style="display:none;" alt="album">
+<p class="product-name">O Holy Night - DJ Williams</p>
+<span class="product-by">DJ Williams</span>
+<span class="product-price">10 ₹.</span>
+</div>
+<div class="playlist_actions">
+<a href="#" class="playlist_btn" title="Listen on Spotify"><i class="fa fa-spotify"></i></a>
+<a href="#" class="playlist_btn" title="Open in iTunes"><i class="fa fa-apple"></i></a>
+<a class="playlist_btn play_buy" data-action="add-to-cart"><i class="fa fa-shopping-cart"></i></a>
+</div>
+
+</div>
+
+<div class="album_playlist_single">
+<div class="audio-play-btn" data-playlist-id="5">
+<a href="javascript:;">
+<span class="flaticon-play flaticon-sm"></span>
+</a>
+</div>
+<div class="album_playlist_title">
+<img src="images/album-img-01.jpg" class="product-img" style="display:none;" alt="album">
+<p class="product-name">Ice & Fire - King Canyon</p>
+<span class="product-by">King Canyon</span>
+<span class="product-price">10 ₹.</span>
+</div>
+<div class="playlist_actions">
+<a href="#" class="playlist_btn" title="Listen on Spotify"><i class="fa fa-spotify"></i></a>
+<a href="#" class="playlist_btn" title="Open in iTunes"><i class="fa fa-apple"></i></a>
+<a class="playlist_btn play_buy" data-action="add-to-cart"><i class="fa fa-shopping-cart"></i></a>
+</div>
+
+</div>
+
+</div>
+</div>
+
+</div>
+
+</div>
+<div class="col-md-5">
+	<h4 class="badge-pill badge-light mt-3 mb-3 p-2 text-center">Cart</h4>
+	<div class="cart"></div>
+</div>
+</div>
+</div>
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+
+<footer class="section-padding has-parallax">
+<div class="container">
+<div class="row">
+<div class="col-md-12">
+<h2 class="subscribe-title"><span>SUBSCRIBE</span></h2>
+</div>
+<div class="col-md-12 clearfix">
+<div class="contact-form subscribe-email">
+<form class="form-signin" id="subscribeform" action="" novalidate="novalidate">
+<div class="subscribe-block">
+<label class="sr-only">Email address</label>
+<input type="text" id="fname" name="fname" class="form-control form-subscribe form-primary" placeholder="Your Name" required="" aria-required="true">
+<input type="email" name="email" class="form-control form-subscribe" placeholder="Your Email" required="" aria-required="true">
+</div>
+<div class="btn-wrap clearifx">
+<button type="submit" class="btn btn-default btn-subscribe" id="js-subscribe-btn"> SUBSCRIBE </button>
+</div>
+<div id="js-subscribe-result" data-success-msg="Great! You have successfully subscribed." data-error-msg="Oops! Something went wrong."></div>
+
+</form>
+</div>
+</div>
+<div class="col-md-12">
+<div class="shape-line">
+<img src="images/shape-line.png" class="img-responsive" alt="svg-style-line">
+</div>
+</div>
+<div class="col-md-12">
+<div class="social-icons">
+<ul>
+<li><a href="#"><span class="flaticon-social-1 flaticon-sm-shape shape1"></span></a></li>
+<li><a href="#"><span class="flaticon-social-media-1 flaticon-sm-shape shape2"></span></a></li>
+<li><a href="#"><span class="flaticon-social-network-1 flaticon-sm-shape shape3"></span></a></li>
+<li><a href="#"><span class="flaticon-social-media flaticon-sm-shape shape4"></span></a></li>
+<li><a href="#"><span class="flaticon-social flaticon-sm-shape shape5"></span></a></li>
+</ul>
+</div>
+</div>
+<div class="col-md-12">
+<div class="shape-line">
+<img src="images/shape-line.png" class="img-responsive" alt="svg-style-line">
+</div>
+</div>
+<div class="col-md-12">
+<div class="address">
+<h4>Duotone Music</h4>
+<span>VIC 30007, UK</span>
+<h4>+44 243 456 789</h4>
+<span><a href="#" class="__cf_email__" style="color: #c6d0d9;">contact[@]triasha[.]dnsserverhost[.]com</a></span>
+</div>
+</div>
+<div class="col-md-12">
+<div class="shape-line">
+<img src="images/shape-line.png" class="img-responsive" alt="svg-style-line">
+</div>
+</div>
+<div class="col-md-12">
+<div class="address">
+<h5>Copyright © Duotone. All rights reserved.</h5>
+<p>Designed by Triasha</p>
+</div>
+</div>
+</div>
+</div>
+</footer>
+
+
+<div class="audio-player">
+<a href="javascript:;" class="hide_player"><i class="fa fa-angle-down"></i> HIDE</a>
+<div id="jquery_jplayer_1" class="jp-jplayer" style="width: 0px; height: 0px;"><img id="jp_poster_0" style="width: 0px; height: 0px; display: none;"><audio id="jp_audio_0" preload="metadata" src="https://triasha.dnsserverhost.com/songs/MeraDilYePukareAaja_(Remix)_DJ_Usman_%20Bhatti_320.mp3" title="File Example Song"></audio></div>
+
+
+<div id="jp_container_1" class="jp-audio" role="application" aria-label="media player">
+<div class="jp-type-playlist">
+
+<div class="jp-gui jp-interface flex-wrap">
+
+<div class="jp-controls flex-item">
+<button class="jp-previous" tabindex="0"><i class="fa fa-step-backward"></i></button>
+<button class="jp-play" tabindex="0"><i class="fa fa-play"></i></button>
+<button class="jp-next" tabindex="0"><i class="fa fa-step-forward"></i></button>
+</div>
+
+
+<div class="jp-progress-container flex-item">
+
+<div class="jp-time-holder">
+<span class="jp-current-time" role="timer" aria-label="time">00:00</span>
+<span class="jp-duration" role="timer" aria-label="duration">02:02</span>
+</div>
+
+
+<div class="jp-progress">
+<div class="jp-seek-bar" style="width: 100%;">
+<div class="jp-play-bar" style="width: 0%;">
+<div class="bullet">
+</div>
+</div>
+</div>
+</div>
+
+</div>
+
+
+<a href="javascript:void(0);" id="playlist-text">
+<div class="jp-now-playing flex-item"><div class="jp-track-name">File Example Song</div> <div class="jp-artist-name">Triasha Chatterjee</div></div>
+</a>
+
+
+<div class="jp-toggles flex-item">
+
+<button id="playlist-toggle" class="jp-show-playlist" tabindex="0"><i class="fa fa-music"></i></button>
+
+<button class="jp-shuffle" tabindex="0">
+<i class="fa fa-random"></i>
+
+</button>
+<button class="jp-repeat" tabindex="0"><i class="fa fa-exchange"></i></button>
+</div>
+
+
+<div class="jp-volume-controls flex-item">
+<button class="jp-mute" tabindex="0"><i class="fa fa-volume-up"></i></button>
+
+<div class="jp-volume-bar">
+<div class="jp-volume-bar-value" style="width: 80%;">
+<div class="bullet">
+</div>
+</div>
+</div>
+
+</div>
+
+</div>
+
+
+<div id="playlist-wrap" class="jp-playlist">
+<ul style="display: block;"><li class="jp-playlist-current"><div><a href="javascript:;" class="jp-playlist-item-remove" style="display: none;">×</a><a href="javascript:;" class="jp-playlist-item jp-playlist-current" tabindex="0">File Example Song <span class="jp-artist">by Triasha Chatterjee</span></a></div></li><li><div><a href="javascript:;" class="jp-playlist-item-remove" style="display: none;">×</a><a href="javascript:;" class="jp-playlist-item" tabindex="0">Dil Galti Kar <span class="jp-artist">by Triasha Chatterjee</span></a></div></li><li><div><a href="javascript:;" class="jp-playlist-item-remove" style="display: none;">×</a><a href="javascript:;" class="jp-playlist-item" tabindex="0">Main Khiladi <span class="jp-artist">by JG</span></a></div></li><li><div><a href="javascript:;" class="jp-playlist-item-remove" style="display: none;">×</a><a href="javascript:;" class="jp-playlist-item" tabindex="0">Tempered Song <span class="jp-artist">by Shelter</span></a></div></li><li><div><a href="javascript:;" class="jp-playlist-item-remove" style="display: none;">×</a><a href="javascript:;" class="jp-playlist-item" tabindex="0">Hidden <span class="jp-artist">by Bad Religion</span></a></div></li><li><div><a href="javascript:;" class="jp-playlist-item-remove" style="display: none;">×</a><a href="javascript:;" class="jp-playlist-item" tabindex="0">Lentement <span class="jp-artist">by Apollo 440</span></a></div></li><li><div><a href="javascript:;" class="jp-playlist-item-remove" style="display: none;">×</a><a href="javascript:;" class="jp-playlist-item" tabindex="0">Lismore <span class="jp-artist">by Bloodhound Gang</span></a></div></li><li><div><a href="javascript:;" class="jp-playlist-item-remove" style="display: none;">×</a><a href="javascript:;" class="jp-playlist-item" tabindex="0">The Separation <span class="jp-artist">by Friendly Fires </span></a></div></li><li><div><a href="javascript:;" class="jp-playlist-item-remove" style="display: none;">×</a><a href="javascript:;" class="jp-playlist-item" tabindex="0">Beside Me <span class="jp-artist">by Friendly Fires </span></a></div></li><li><div><a href="javascript:;" class="jp-playlist-item-remove" style="display: none;">×</a><a href="javascript:;" class="jp-playlist-item" tabindex="0">Bubble <span class="jp-artist">by Skunkhour</span></a></div></li><li><div><a href="javascript:;" class="jp-playlist-item-remove" style="display: none;">×</a><a href="javascript:;" class="jp-playlist-item" tabindex="0">Stirring of a fool <span class="jp-artist">by The Meanies</span></a></div></li><li><div><a href="javascript:;" class="jp-playlist-item-remove" style="display: none;">×</a><a href="javascript:;" class="jp-playlist-item" tabindex="0">Partir <span class="jp-artist">by The Living End</span></a></div></li><li><div><a href="javascript:;" class="jp-playlist-item-remove" style="display: none;">×</a><a href="javascript:;" class="jp-playlist-item" tabindex="0">Thin Ice <span class="jp-artist">by Screaming Trees</span></a></div></li></ul>
+</div>
+
+
+<div class="jp-no-solution" style="display: none;">
+<span>Update Required</span> To play the media you will need to either update your browser to a recent version or update your <a href="https://get.adobe.com/flashplayer/" target="_blank">Flash plugin</a>.
+</div>
+</div>
+
+</div>
+
+</div>
+
+<script>
+"use strict";                        
+let cart = [];
+let cartTotal = 0;
+const cartDom = document.querySelector(".cart");
+const addtocartbtnDom = document.querySelectorAll('[data-action="add-to-cart"]');
+
+addtocartbtnDom.forEach(addtocartbtnDom => {
+  addtocartbtnDom.addEventListener("click", () => {
+    const productDom = addtocartbtnDom.parentNode.parentNode;
+    const product = {
+      img: productDom.querySelector(".product-img").getAttribute("src"),
+      name: productDom.querySelector(".product-name").innerText,
+      price: productDom.querySelector(".product-price").innerText,
+      quantity: 1
+   };
+
+const IsinCart = cart.filter(cartItem => cartItem.name === product.name).length > 0;
+if (IsinCart === false) {
+  cartDom.insertAdjacentHTML("beforeend",`
+  <div class="d-flex flex-row shadow-sm card cart-items mt-2 mb-3 animated flipInX" style="margin-top:10px;border-bottom:1px black dashed;">
+    <div class="row">
+		<div class="col-md-12">
+			<div class="row">
+				<div class="col-md-2 cartimgmob">
+					<img src="${product.img}" alt="${product.name}" style="max-width: 50px;"/>
+				</div>
+				<div class="col-md-4 carttextmob">
+					<p class="text-info cart_item_name">${product.name}</p>
+				</div>
+				<div class="col-md-2 cartpricemob">
+					<p class="text-success cart_item_price">${product.price}</p>
+				</div>
+				<div class="col-md-1 cartdecmob">
+				  <button class="btn badge badge-info" type="button" data-action="decrease-item">&minus;
+				</div>
+				<div class="col-md-1 cartquanmob">
+				  <p class="text-success cart_item_quantity">${product.quantity}</p>
+				</div>
+				<div class="col-md-1 ml-auto cartquanmob">
+					<button class="btn badge badge-secondary" type="button" data-action="increase-item">&plus;
+				</div>
+				<div class="col-md-1 cartquanmob">
+				  <button class="btn badge badge-danger" type="button" data-action="remove-item">&times;
+				</div>
+			</div>
+		</div>
+	</div>
+  </div> `);
+
+  if(document.querySelector('.cart-footer') === null){
+    cartDom.insertAdjacentHTML("afterend",  `
+		<div class="col-md-12" style="margin-top:10px;">
+			<div class="d-flex flex-row shadow-sm card cart-footer mt-2 mb-3 animated flipInX">
+				<div class="col-md-6 cartquanmob">
+					<button class="btn btn-danger btn-clear" type="button" data-action="clear-cart">Clear Cart
+				</div>
+				<div class="col-md-6 ml-auto cartquanmob">
+					<button class="btn btn-primary btn-checkout" type="button" data-action="check-out">Pay <span class="pay"></span> 
+						&#10137;
+				</div>
+			</div>
+		</div>`); }
+
+    addtocartbtnDom.innerText = "Added";
+    addtocartbtnDom.classList.remove("clearadd");
+    addtocartbtnDom.classList.add("added");
+    cart.push(product);
+
+    const cartItemsDom = cartDom.querySelectorAll(".cart-items");
+    cartItemsDom.forEach(cartItemDom => {
+
+    if (cartItemDom.querySelector(".cart_item_name").innerText === product.name) {
+
+      cartTotal += parseInt(cartItemDom.querySelector(".cart_item_quantity").innerText) 
+      * parseInt(cartItemDom.querySelector(".cart_item_price").innerText);
+      document.querySelector('.pay').innerText = cartTotal + " ₹.";
+
+      // increase item in cart
+      cartItemDom.querySelector('[data-action="increase-item"]').addEventListener("click", () => {
+        cart.forEach(cartItem => {
+          if (cartItem.name === product.name) {
+            cartItemDom.querySelector(".cart_item_quantity").innerText = ++cartItem.quantity;
+            cartItemDom.querySelector(".cart_item_price").innerText = parseInt(cartItem.quantity) *
+            parseInt(cartItem.price) + " ₹.";
+            cartTotal += parseInt(cartItem.price)
+            document.querySelector('.pay').innerText = cartTotal + " ₹.";
+          }
+        });
+      });
+
+      // decrease item in cart
+      cartItemDom.querySelector('[data-action="decrease-item"]').addEventListener("click", () => {
+        cart.forEach(cartItem => {
+          if (cartItem.name === product.name) {
+            if (cartItem.quantity > 1) {
+              cartItemDom.querySelector(".cart_item_quantity").innerText = --cartItem.quantity;
+              cartItemDom.querySelector(".cart_item_price").innerText = parseInt(cartItem.quantity) *
+              parseInt(cartItem.price) + " ₹.";
+              cartTotal -= parseInt(cartItem.price)
+              document.querySelector('.pay').innerText = cartTotal + " ₹.";
+            }
+          }
+        });
+      });
+
+      //remove item from cart
+      cartItemDom.querySelector('[data-action="remove-item"]').addEventListener("click", () => {
+        cart.forEach(cartItem => {
+          if (cartItem.name === product.name) {
+              cartTotal -= parseInt(cartItemDom.querySelector(".cart_item_price").innerText);
+              document.querySelector('.pay').innerText = cartTotal + " ₹.";
+              cartItemDom.remove();
+              cart = cart.filter(cartItem => cartItem.name !== product.name);
+              addtocartbtnDom.innerText = "";
+			  addtocartbtnDom.classList.add("clearadd");
+			  addtocartbtnDom.classList.remove("added");
+              addtocartbtnDom.disabled = false;
+          }
+          if(cart.length < 1){
+            document.querySelector('.cart-footer').remove();
+          }
+        });
+      });
+
+      //clear cart
+      document.querySelector('[data-action="clear-cart"]').addEventListener("click" , () => {
+        cartItemDom.remove();
+        cart = [];
+        cartTotal = 0;
+        if(document.querySelector('.cart-footer') !== null){
+          document.querySelector('.cart-footer').remove();
+        }
+        addtocartbtnDom.innerText = "";
+		addtocartbtnDom.classList.add("clearadd");
+		addtocartbtnDom.classList.remove("added");
+        addtocartbtnDom.disabled = false;
+      });
+
+      document.querySelector('[data-action="check-out"]').addEventListener("click" , () => {
+        if(document.getElementById('paypal-form') === null){
+          checkOut();
+        }
+      });
+    }
+  });
+}
+});
+});
+
+function animateImg(img) {
+  img.classList.add("animated","shake");
+}
+
+function normalImg(img) {
+  img.classList.remove("animated","shake");
+}
+
+function checkOut() {
+  let paypalHTMLForm = `
+  <form id="paypal-form" action="https://www.paypal.com/cgi-bin/webscr" method="post" >
+    <input type="hidden" name="cmd" value="_cart">
+    <input type="hidden" name="upload" value="1">
+    <input type="hidden" name="business" value="dtnsa@mail.com">
+    <input type="hidden" name="currency_code" value="INR">`;
+   
+  cart.forEach((cartItem,index) => {
+   ++index;
+   paypalHTMLForm += ` <input type="hidden" name="item_name_${index}" value="${cartItem.name}">
+    <input type="hidden" name="amount_${index}" value="${cartItem.price.replace("Rs.","")}">
+    <input type="hidden" name="quantity_${index}" value="${cartItem.quantity}">`;
+  });
+   
+  paypalHTMLForm += `<input type="submit" value="PayPal" class="paypal">
+  </form><div class="overlay">Please wait...</div>`;
+  document.querySelector('body').insertAdjacentHTML("beforeend", paypalHTMLForm);
+  document.getElementById("paypal-form").submit();
+}
+</script>
+<script src="js/lib/jquery-1.12.0.min.js"></script>
+
+<script src="js/lib/bootstrap.min.js"></script>
+
+<script src="js/plugins/atvimg.js"></script>
+<script src="js/plugins/jquery.jplayer.min.js"></script>
+<script src="js/plugins/jplayer.playlist.min.js"></script>
+<script src="js/audio-player.js"></script>
+<script src="js/validate.js"></script>
+<script src="js/contact.js"></script>
+<script src="js/subscribe.js"></script>
+
+<script src="js/script.js"></script>
+
+
+<iframe scrolling="no" frameborder="0" allowtransparency="true" src="https://platform.twitter.com/widgets/widget_iframe.2b2d73daf636805223fb11d48f3e94f7.html?origin=https%3A%2F%2Ftriasha.dnsserverhost.com" title="Twitter settings iframe" style="display: none;" bis_size="{&quot;x&quot;:0,&quot;y&quot;:0,&quot;w&quot;:0,&quot;h&quot;:0,&quot;abs_x&quot;:0,&quot;abs_y&quot;:0}"></iframe><iframe id="rufous-sandbox" scrolling="no" frameborder="0" allowtransparency="true" allowfullscreen="true" style="position: absolute; visibility: hidden; display: none; width: 0px; height: 0px; padding: 0px; border: none;" title="Twitter analytics iframe"></iframe></body></html>
